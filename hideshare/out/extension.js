@@ -77,10 +77,13 @@ async function activate(context) {
         if (!editor) {
             return;
         }
-        const activeLine = editor.selection.active.line;
+        let activeLine = editor.selection.active.line;
+        let early = 0;
+        let later = 0;
         if (extensionMode === 'line') {
             // If the line is being typed, apply the ellipsis and hide the text
-            applyHiddenLineAndEllipsis(editor, hiddenLineDecorationType, ellipsisDecorationType);
+            const lineRange = editor.document.lineAt(activeLine).range;
+            applyHiddenLineAndEllipsis(lineRange, editor, hiddenLineDecorationType, ellipsisDecorationType);
             // Remove decoration from the previous line and add to new line
             if (lastActiveLine !== -1 && lastActiveLine !== activeLine) {
                 removeLineDecoration(editor, hiddenLineDecorationType, ellipsisDecorationType);
@@ -91,31 +94,40 @@ async function activate(context) {
         else if (extensionMode === 'block') {
             countAllTabs(editor, tabs);
             event.contentChanges.forEach((change) => {
-                let line = editor.document.lineAt(activeLine);
                 if (change.text.includes('    ')) {
                     console.log('tab added to', activeLine);
-                    console.log('tabbed');
                     if (!tabs[activeLine])
                         tabs[activeLine] = 0;
                     tabs[activeLine] += 1;
-                    // } else if (change.text.includes('\n')) {
-                    // console.log('new line added')
-                    // tabs.splice(activeLine + 1, 0, tabs[activeLine]);
-                    // knownLineCount++;
-                    // console.log(tabs)
-                    // } else if (change.text.includes('   ')) {
-                    // 	tabs.splice(activeLine, 0, tabs[activeLine + 1])
-                    // 	// tabs[activeLine] = tabs[activeLine + 1]
-                    // 	console.log(tabs)
-                    // } else if (editor.document.lineCount != knownLineCount) {
-                    // 	knownLineCount = editor.document.lineCount;
-                    // 	countAllTabs(editor, tabs)
-                    // console.log(tabs)
-                    // 	// console.log('line to remove?', activeLine, line)
-                    // 	// tabs.splice(activeLine, 1)
-                    // 	// console.log(tabs)
                 }
+                // get cursor location
+                // everything with the same identation level in the same area is hidden
+                // + 1 level up
+                early = later = activeLine;
+                console.log('active line number', activeLine);
+                while (tabs[early] == tabs[activeLine] || tabs[later] == tabs[activeLine]) {
+                    if (tabs[early] == tabs[activeLine]) {
+                        early--;
+                    }
+                    if (tabs[later] == tabs[activeLine]) {
+                        later++;
+                    }
+                }
+                // when exit the loop, early will be correct, later will be off by one
+                later--;
+                console.log(early, later, tabs[early], tabs[later]);
             });
+            // If the line is being typed, apply the ellipsis and hide the text
+            console.log(editor.document.lineAt(early).text, editor.document.lineAt(later).text);
+            const lineRange = new vscode.Range(editor.document.lineAt(early).range.start, editor.document.lineAt(later).range.end);
+            console.log('range', lineRange.start, lineRange.end);
+            applyHiddenLineAndEllipsis(lineRange, editor, hiddenLineDecorationType, ellipsisDecorationType);
+            // Remove decoration from the previous line and add to new line
+            if (lineRange.contains(editor.document.lineAt(activeLine).range)) {
+                removeLineDecoration(editor, hiddenLineDecorationType, ellipsisDecorationType);
+            }
+            // Update last active line to the current line
+            // lastActiveLine = activeLine;
         }
     });
     context.subscriptions.push(onDidChangeTextDocument);
@@ -138,9 +150,9 @@ function countAllTabs(editor, tabs) {
     console.log(tabs);
 }
 // Apply both the hidden line text and the ellipsis decoration to the current line
-function applyHiddenLineAndEllipsis(editor, hiddenDecorationType, ellipsisDecorationType) {
-    const activeLine = editor.selection.active.line;
-    const lineRange = editor.document.lineAt(activeLine).range;
+function applyHiddenLineAndEllipsis(lineRange, editor, hiddenDecorationType, ellipsisDecorationType) {
+    // const activeLine = editor.selection.active.line;
+    // const lineRange = editor.document.lineAt(activeLine).range;
     // Apply the hidden text decoration (make text transparent) to the line
     editor.setDecorations(hiddenDecorationType, [lineRange]);
     // Apply the ellipsis decoration to the line
