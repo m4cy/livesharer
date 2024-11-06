@@ -75,7 +75,7 @@ async function activate(context) {
                 if (peer.role !== vsls.Role.Host) {
                     event.contentChanges.forEach(change => {
                         let line = change.range.start.line;
-                        applyHiddenLineAndEllipsis(editor, hiddenLineDecorationType, ellipsisDecorationType, line);
+                        applyHiddenLineAndEllipsis([line], editor, hiddenLineDecorationType, ellipsisDecorationType);
                     });
                 }
             }
@@ -89,34 +89,38 @@ async function activate(context) {
             lastActiveLine = activeLine;
         }
         else if (extensionMode === 'block') {
-            // Record indentation levels for all editor lines
-            countAllTabs(editor, tabs);
-            event.contentChanges.forEach((change) => {
-                // If new tab is added to the line, increment tab count
-                // if (change.text.includes('    ')) {
-                // 	console.log('tab added to', activeLine);
-                // 	if (!tabs[activeLine]) tabs[activeLine] = 0
-                // 	tabs[activeLine] += 1
-                // }
-                early = later = activeLine;
-                // console.log('active line number', activeLine)
-                // Find start and end of line range based on same indentation level
-                while (tabs[early] === tabs[activeLine] || tabs[later] === tabs[activeLine]) {
-                    if (tabs[early] === tabs[activeLine]) {
-                        early--;
-                    }
-                    if (tabs[later] === tabs[activeLine]) {
-                        later++;
-                    }
+            if (liveShare.session.role !== vsls.Role.Guest) {
+                let peer = await liveShare.getPeerForTextDocumentChangeEvent(event);
+                if (peer.role !== vsls.Role.Host) {
+                    // Record indentation levels for all editor lines
+                    countAllTabs(editor, tabs);
+                    event.contentChanges.forEach((change) => {
+                        // If new tab is added to the line, increment tab count
+                        // if (change.text.includes('    ')) {
+                        // 	console.log('tab added to', activeLine);
+                        // 	if (!tabs[activeLine]) tabs[activeLine] = 0
+                        // 	tabs[activeLine] += 1
+                        // }
+                        early = later = activeLine;
+                        // console.log('active line number', activeLine)
+                        // Find start and end of line range based on same indentation level
+                        while (tabs[early] == tabs[activeLine] || tabs[later] == tabs[activeLine]) {
+                            if (tabs[early] == tabs[activeLine]) {
+                                early--;
+                            }
+                            if (tabs[later] == tabs[activeLine]) {
+                                later++;
+                            }
+                        }
+                        // When we exit the loop, early will be correct, later will be one greater than it should be
+                        later--;
+                        // console.log(early, later, tabs[early], tabs[later])
+                    });
+                    // If the line is being typed, apply the ellipsis and hide the text
+                    // console.log(editor.document.lineAt(early).text, editor.document.lineAt(later).text)
+                    applyHiddenLineAndEllipsis([early, later], editor, hiddenLineDecorationType, ellipsisDecorationType);
                 }
-                // When we exit the loop, early will be correct, later will be one greater than it should be
-                later--;
-                // console.log(early, later, tabs[early], tabs[later])
-            });
-            // If the line is being typed, apply the ellipsis and hide the text
-            // console.log(editor.document.lineAt(early).text, editor.document.lineAt(later).text)
-            const lineRange = new vscode.Range(editor.document.lineAt(early).range.start, editor.document.lineAt(later).range.end);
-            applyHiddenLineAndEllipsisRange(lineRange, editor, hiddenLineDecorationType, ellipsisDecorationType);
+            }
         }
     });
     context.subscriptions.push(onDidChangeTextDocument);
@@ -140,19 +144,19 @@ function countAllTabs(editor, tabs) {
     console.log(tabs);
 }
 // Apply both the hidden line text and the ellipsis decoration to the current line
-function applyHiddenLineAndEllipsisRange(lineRange, editor, hiddenDecorationType, ellipsisDecorationType) {
+function applyHiddenLineAndEllipsis(lineNumber, editor, hiddenDecorationType, ellipsisDecorationType) {
     // const activeLine = editor.selection.active.line;
     // const lineRange = editor.document.lineAt(activeLine).range;
+    let lineRange;
+    if (lineNumber.length == 1) {
+        lineRange = editor.document.lineAt(lineNumber[0]).range;
+    }
+    else {
+        lineRange = new vscode.Range(editor.document.lineAt(lineNumber[0]).range.start, editor.document.lineAt(lineNumber[1]).range.end);
+    }
     // Apply the hidden text decoration (make text transparent) to the line
     editor.setDecorations(hiddenDecorationType, [lineRange]);
     // Apply the ellipsis decoration to the line
-    editor.setDecorations(ellipsisDecorationType, [lineRange]);
-}
-// Apply both the hidden line text and the ellipsis decoration to the current line
-function applyHiddenLineAndEllipsis(editor, hiddenDecorationType, ellipsisDecorationType, lineNumber) {
-    const lineRange = editor.document.lineAt(lineNumber).range;
-    // Apply the hidden text decoration (make text transparent) to the line
-    editor.setDecorations(hiddenDecorationType, [lineRange]);
     editor.setDecorations(ellipsisDecorationType, [lineRange]);
 }
 // Remove the decoration from the specified line
