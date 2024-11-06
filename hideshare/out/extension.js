@@ -36,6 +36,13 @@ async function activate(context) {
         return;
     }
     console.log('session', liveShare.session);
+    if (liveShare) {
+        // vscode.window.showInformationMessage(`Hello World from ${liveShare.session.role}!`);
+        const sessionLink = await liveShare.share();
+        if (sessionLink) {
+            vscode.window.showInformationMessage(`Live Share link: ${sessionLink}`);
+        }
+    }
     // Create a decoration type to hide the line's text and display ellipsis (...)
     const hiddenLineDecorationType = vscode.window.createTextEditorDecorationType({
         color: 'transparent', // Make the text transparent (invisible)
