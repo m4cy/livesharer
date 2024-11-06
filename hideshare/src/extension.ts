@@ -32,33 +32,9 @@ export async function activate(context: vscode.ExtensionContext) {
 	// Track the last active line number -- loop over
 	let lastActiveLine = -1;
 
-	// when code block is complete, remove line decorations
-	// for bracketed languages, I can manually check for for, if, while, switch, and add the line to the active block set.
-	// but with auto-complete, the closing bracket is probably automatically added, so it's just based on cursor position
-	// between two brackets
-	// or the number of tabs in I am.
-	// so I can write a function to constantly keep track of all the open and closed brackets (and which line number they're on)
-	// and if my cursor position is somewhere between an open and closed bracket, I make everything in the middle invisible
-	// for python, I can write a function that keeps track of number of indentations there are on each line
-	// based on the indentation level of the line of my cursor position, make invisible
-	// pre-parse the document to fill up indicators
-	const editor = vscode.window.activeTextEditor;
-	if (!editor) {
-		console.log('no active window yet')
-		return;
-	}
-
-	// const docType = vscode.window.activeTextEditor?.document.languageId
-
+	// Keep track of indentation levels
 	const tabs: number[] = [];
-	let knownLineCount = editor.document.lineCount;
 
-
-
-	// console.log('sanity check', openBrackets)
-
-	console.log('tabs', tabs)
-	// console.log('brackets', brackets)
 	// Trigger the decoration update based on text changes or cursor position
 	const onDidChangeTextDocument = vscode.workspace.onDidChangeTextDocument((event) => {
 
@@ -66,8 +42,10 @@ export async function activate(context: vscode.ExtensionContext) {
 		if (!editor) {
 			return;
 		}
+
 		let activeLine = editor.selection.active.line;
 
+		// Beginning and end of line range to hide in block mode
 		let early = 0;
 		let later = 0;
 
@@ -85,19 +63,20 @@ export async function activate(context: vscode.ExtensionContext) {
 			lastActiveLine = activeLine;
 
 		} else if (extensionMode === 'block') {
+			// Record indentation levels for all editor lines
 			countAllTabs(editor, tabs)
 			event.contentChanges.forEach((change) => {
-				if (change.text.includes('    ')) {
-					console.log('tab added to', activeLine);
-					if (!tabs[activeLine]) tabs[activeLine] = 0
-					tabs[activeLine] += 1
-				}
+				// If new tab is added to the line, increment tab count
+				// if (change.text.includes('    ')) {
+				// 	console.log('tab added to', activeLine);
+				// 	if (!tabs[activeLine]) tabs[activeLine] = 0
+				// 	tabs[activeLine] += 1
+				// }
 
-				// get cursor location
-				// everything with the same identation level in the same area is hidden
-				// + 1 level up
 				early = later = activeLine;
-				console.log('active line number', activeLine)
+				// console.log('active line number', activeLine)
+
+				// Find start and end of line range based on same indentation level
 				while (tabs[early] == tabs[activeLine] || tabs[later] == tabs[activeLine]) {
 					if (tabs[early] == tabs[activeLine]) {
 						early--;
@@ -106,30 +85,22 @@ export async function activate(context: vscode.ExtensionContext) {
 						later++;
 					}
 				}
-				// when exit the loop, early will be correct, later will be off by one
+				// When we exit the loop, early will be correct, later will be one greater than it should be
 				later--;
-				console.log(early, later, tabs[early], tabs[later])
+				// console.log(early, later, tabs[early], tabs[later])
 
 			})
 
 			// If the line is being typed, apply the ellipsis and hide the text
-			console.log(editor.document.lineAt(early).text, editor.document.lineAt(later).text)
+			// console.log(editor.document.lineAt(early).text, editor.document.lineAt(later).text)
 			const lineRange = new vscode.Range(editor.document.lineAt(early).range.start, editor.document.lineAt(later).range.end);
-			console.log('range', lineRange.start, lineRange.end)
 			applyHiddenLineAndEllipsis(lineRange, editor, hiddenLineDecorationType, ellipsisDecorationType);
-
-			// Remove decoration from the previous line and add to new line
-			if (lineRange.contains(editor.document.lineAt(activeLine).range)) {
-				removeLineDecoration(editor, hiddenLineDecorationType, ellipsisDecorationType);
-			}
-
-			// Update last active line to the current line
-			// lastActiveLine = activeLine;
 		}
 	})
 	context.subscriptions.push(onDidChangeTextDocument);
 }
 
+// Calculate how many indents are on a line
 function countAllTabs(
 	editor: vscode.TextEditor,
 	tabs: number[],
@@ -140,9 +111,9 @@ function countAllTabs(
 		if (!line.isEmptyOrWhitespace) {
 			// leetcode uses tab = 4 spaces
 			tabs[i] = line.firstNonWhitespaceCharacterIndex / 4;
-		} else if (line.text.includes('    ')) {
+		} else if (line.text.includes('    ')) { // if line is composed only of tabs, give it the same indent level as the line below it
 			tabs[i] = editor.document.lineAt(i + 1).firstNonWhitespaceCharacterIndex / 4;
-		} else {
+		} else { // empty line
 			tabs[i] = 0;
 		}
 	}
