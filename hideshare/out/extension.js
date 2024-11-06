@@ -65,41 +65,9 @@ async function activate(context) {
         console.log('no active window yet');
         return;
     }
-    const docType = vscode.window.activeTextEditor?.document.languageId;
+    // const docType = vscode.window.activeTextEditor?.document.languageId
     const tabs = [];
-    // const brackets: number[][] = [];
-    // const openBrackets = [];
-    for (let i = 0; i < editor.document.lineCount; i++) {
-        const line = editor.document.lineAt(i);
-        console.log('line', i, line.text);
-        // if (docType === 'python') {
-        // tab closure
-        if (!line.isEmptyOrWhitespace) {
-            // leetcode uses tab = 4 spaces
-            tabs[i] = line.firstNonWhitespaceCharacterIndex / 4;
-        }
-        else {
-            tabs[i] = 0;
-        }
-        // } else if (docType === 'java' || docType === 'c' || docType === 'cpp' || docType === 'javascript') {
-        // 	// bracket closure
-        // 	// 2d array better,
-        // 	// keep track of line of each opening and closing bracket
-        // 	// for each cursor position, look for the most restrictive interval I could be contained in 
-        // 	if (line.text.includes('{')) {
-        // 		console.log('open bracket')
-        // 		brackets.push([i])
-        // 		// this will act as my stack
-        // 		openBrackets.push(brackets.length - 1)
-        // 	} else if (line.text.includes('}')) {
-        // 		console.log('closed bracket', openBrackets)
-        // 		let lastOpenBracket = openBrackets.pop()
-        // 		if (!lastOpenBracket) return;
-        // 		let openBracket = brackets[lastOpenBracket][0]
-        // 		brackets[openBracket].push(i)
-        // 	}
-        // }
-    }
+    let knownLineCount = editor.document.lineCount;
     // console.log('sanity check', openBrackets)
     console.log('tabs', tabs);
     // console.log('brackets', brackets)
@@ -121,29 +89,53 @@ async function activate(context) {
             lastActiveLine = activeLine;
         }
         else if (extensionMode === 'block') {
+            countAllTabs(editor, tabs);
             event.contentChanges.forEach((change) => {
-                // if (docType === 'python') {
-                // tab closure
-                if (change.text === '   ') {
+                let line = editor.document.lineAt(activeLine);
+                if (change.text.includes('    ')) {
                     console.log('tab added to', activeLine);
+                    console.log('tabbed');
                     if (!tabs[activeLine])
                         tabs[activeLine] = 0;
                     tabs[activeLine] += 1;
-                    console.log(tabs);
-                    // }
-                    // } else if (docType === 'java' || docType === 'c' || docType === 'cpp' || docType === 'javascript') {
-                    // 	// bracket closure
-                    // 	if (change.text === '{' || change.text === '}') {
-                    // 		console.log(change.text, 'added to', activeLine);
-                    // 		// brackets.push(activeLine)
-                    // 	} else {
-                    // 		console.log(change.text)
-                    // 	}
+                    // } else if (change.text.includes('\n')) {
+                    // console.log('new line added')
+                    // tabs.splice(activeLine + 1, 0, tabs[activeLine]);
+                    // knownLineCount++;
+                    // console.log(tabs)
+                    // } else if (change.text.includes('   ')) {
+                    // 	tabs.splice(activeLine, 0, tabs[activeLine + 1])
+                    // 	// tabs[activeLine] = tabs[activeLine + 1]
+                    // 	console.log(tabs)
+                    // } else if (editor.document.lineCount != knownLineCount) {
+                    // 	knownLineCount = editor.document.lineCount;
+                    // 	countAllTabs(editor, tabs)
+                    // console.log(tabs)
+                    // 	// console.log('line to remove?', activeLine, line)
+                    // 	// tabs.splice(activeLine, 1)
+                    // 	// console.log(tabs)
                 }
             });
         }
     });
     context.subscriptions.push(onDidChangeTextDocument);
+}
+function countAllTabs(editor, tabs) {
+    for (let i = 0; i < editor.document.lineCount; i++) {
+        const line = editor.document.lineAt(i);
+        console.log('line', i, line.text);
+        if (!line.isEmptyOrWhitespace) {
+            // leetcode uses tab = 4 spaces
+            tabs[i] = line.firstNonWhitespaceCharacterIndex / 4;
+        }
+        else if (line.text.includes('    ')) {
+            tabs[i] = editor.document.lineAt(i + 1).firstNonWhitespaceCharacterIndex / 4;
+        }
+        else {
+            tabs[i] = 0;
+        }
+    }
+    console.log(tabs);
 }
 // Apply both the hidden line text and the ellipsis decoration to the current line
 function applyHiddenLineAndEllipsis(editor, hiddenDecorationType, ellipsisDecorationType) {
