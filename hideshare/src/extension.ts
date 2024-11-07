@@ -91,20 +91,23 @@ export async function activate(context: vscode.ExtensionContext) {
 						// 	tabs[activeLine] += 1
 						// }
 
-						early = later = activeLine;
+						early = later = change.range.start.line;
 						// console.log('active line number', activeLine)
 
 						// Find start and end of line range based on same indentation level
-						while (tabs[early] == tabs[activeLine] || tabs[later] == tabs[activeLine]) {
-							if (tabs[early] == tabs[activeLine]) {
+						while (tabs[early] == tabs[change.range.start.line] || tabs[later] == tabs[change.range.start.line]) {
+							if (tabs[early] == tabs[change.range.start.line]) {
 								early--;
 							}
-							if (tabs[later] == tabs[activeLine]) {
+							if (tabs[later] == tabs[change.range.start.line]) {
 								later++;
 							}
 						}
 						// When we exit the loop, early will be correct, later will be one greater than it should be
 						later--;
+						if (tabs[early] - tabs[change.range.start.line] > 1) {
+							early++;
+						}
 						// console.log(early, later, tabs[early], tabs[later])
 
 					});
