@@ -75,7 +75,8 @@ async function activate(context) {
                 if (peer.role !== vsls.Role.Host) {
                     event.contentChanges.forEach(change => {
                         let line = change.range.start.line;
-                        applyHiddenLineAndEllipsis([line], editor, hiddenLineDecorationType, ellipsisDecorationType);
+                        hideLine([line], editor, hiddenLineDecorationType);
+                        updateEllipsisDecoration(editor, line);
                     });
                 }
             }
@@ -104,11 +105,11 @@ async function activate(context) {
                         early = later = change.range.start.line;
                         // console.log('active line number', activeLine)
                         // Find start and end of line range based on same indentation level
-                        while (tabs[early] == tabs[change.range.start.line] || tabs[later] == tabs[change.range.start.line]) {
-                            if (tabs[early] == tabs[change.range.start.line]) {
+                        while (tabs[early] === tabs[change.range.start.line] || tabs[later] === tabs[change.range.start.line]) {
+                            if (tabs[early] === tabs[change.range.start.line]) {
                                 early--;
                             }
-                            if (tabs[later] == tabs[change.range.start.line]) {
+                            if (tabs[later] === tabs[change.range.start.line]) {
                                 later++;
                             }
                         }
@@ -118,15 +119,52 @@ async function activate(context) {
                             early++;
                         }
                         // console.log(early, later, tabs[early], tabs[later])
+                        updateEllipsisDecoration(editor, change.range.start.line); // can track changes on change line
                     });
                     // If the line is being typed, apply the ellipsis and hide the text
                     // console.log(editor.document.lineAt(early).text, editor.document.lineAt(later).text)
-                    applyHiddenLineAndEllipsis([early, later], editor, hiddenLineDecorationType, ellipsisDecorationType);
+                    hideLine([early, later], editor, hiddenLineDecorationType);
+                    // applyHiddenLineAndEllipsis([early, later], editor, hiddenLineDecorationType, ellipsisDecorationType);
                 }
             }
         }
     });
     context.subscriptions.push(onDidChangeTextDocument);
+}
+// Decoration type for the ellipsis effect
+const ellipsisDecorationTypes = [
+    vscode.window.createTextEditorDecorationType({
+        after: {
+            contentText: '.', // Single dot
+            color: 'gray',
+        },
+    }),
+    vscode.window.createTextEditorDecorationType({
+        after: {
+            contentText: '..', // Two dots
+            color: 'gray',
+        },
+    }),
+    vscode.window.createTextEditorDecorationType({
+        after: {
+            contentText: '...', // Three dots
+            color: 'gray',
+        },
+    }),
+];
+// Change the ellipsis decoration based on character count
+function updateEllipsisDecoration(editor, lineNumber) {
+    // Using actual line value so accessing peer's cursor position implicitly
+    const lineText = editor.document.lineAt(lineNumber).text;
+    const modValue = lineText.length % 3; // Calculate which style to apply
+    const lineRange = new vscode.Range(lineNumber, 0, lineNumber, lineText.length);
+    // Clear old decorations and set current ellipses style
+    ellipsisDecorationTypes.forEach((decoration, index) => {
+        if (index !== modValue) {
+            editor.setDecorations(decoration, []);
+        }
+    });
+    editor.setDecorations(ellipsisDecorationTypes[modValue], [lineRange]);
 }
 // Calculate how many indents are on a line
 function countAllTabs(editor, tabs) {
@@ -146,12 +184,10 @@ function countAllTabs(editor, tabs) {
     }
     console.log(tabs);
 }
-// Apply both the hidden line text and the ellipsis decoration to the current line
-function applyHiddenLineAndEllipsis(lineNumber, editor, hiddenDecorationType, ellipsisDecorationType) {
-    // const activeLine = editor.selection.active.line;
-    // const lineRange = editor.document.lineAt(activeLine).range;
+// Apply both the hidden line text to the current line
+function hideLine(lineNumber, editor, hiddenDecorationType) {
     let lineRange;
-    if (lineNumber.length == 1) {
+    if (lineNumber.length === 1) {
         lineRange = editor.document.lineAt(lineNumber[0]).range;
     }
     else {
@@ -159,10 +195,8 @@ function applyHiddenLineAndEllipsis(lineNumber, editor, hiddenDecorationType, el
     }
     // Apply the hidden text decoration (make text transparent) to the line
     editor.setDecorations(hiddenDecorationType, [lineRange]);
-    // Apply the ellipsis decoration to the line
-    editor.setDecorations(ellipsisDecorationType, [lineRange]);
 }
-// Remove the decoration from the specified line
+// Remove the decoration from the file (used when moving to next line)
 function removeLineDecoration(editor, hiddenDecorationType, ellipsisDecorationType) {
     editor.setDecorations(hiddenDecorationType, []); // Clear hidden text decoration
     editor.setDecorations(ellipsisDecorationType, []); // Clear ellipsis decoration
