@@ -156,8 +156,11 @@ const ellipsisDecorationTypes = [
 function updateEllipsisDecoration(editor, lineNumber) {
     // Using actual line value so accessing peer's cursor position implicitly
     const lineText = editor.document.lineAt(lineNumber).text;
-    const modValue = lineText.length % 3; // Calculate which style to apply
-    const lineRange = new vscode.Range(lineNumber, 0, lineNumber, lineText.length);
+    // Find the first non-whitespace
+    const startPos = lineText.search(/\S/);
+    // vscode.window.showInformationMessage(`lineText: ${lineText}, startPos: ${startPos.character}`);
+    const modValue = lineText.length % 3;
+    const lineRange = new vscode.Range(lineNumber, startPos, lineNumber, startPos);
     // Clear old decorations and set current ellipses style
     ellipsisDecorationTypes.forEach((decoration, index) => {
         if (index !== modValue) {
