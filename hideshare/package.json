@@ -20,8 +20,12 @@
   "contributes": {
     "commands": [
       {
-        "command": "extension.revealLines",
-        "title": "Reveal Hidden Lines"
+        "command": "hideshare.enableLineMode",
+        "title": "Hideshare: Enable Line Mode"
+      },
+      {
+        "command": "hideshare.enableBlockMode",
+        "title": "Hideshare: Enable Block Mode"
       }
     ]
   },

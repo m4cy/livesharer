@@ -3,8 +3,21 @@ import * as vsls from 'vsls';
 
 export async function activate(context: vscode.ExtensionContext) {
 
-  const extensionMode = await vscode.window.showInformationMessage('Select a HideShare mode', 'real-time', 'line', 'block');
+  let extensionMode = await vscode.window.showInformationMessage('Select a HideShare mode', 'real-time', 'line', 'block');
   console.log('extensionMode', extensionMode);
+
+  const changeModeLine = vscode.commands.registerCommand('hideshare.enableLineMode', () => {
+		vscode.window.showInformationMessage('Changed to Line Mode!');
+    extensionMode = 'line';
+    // TODO: send message to guest that mode was changed - need to figure out how to have extension running on both host and guest
+	});
+  context.subscriptions.push(changeModeLine);
+
+  const changeModeBlock = vscode.commands.registerCommand('hideshare.enableBlockMode', () => {
+    vscode.window.showInformationMessage('Changed to Block Mode!');
+    extensionMode = 'block';
+  });
+  context.subscriptions.push(changeModeBlock);
 
   // Wait for Live Share API to be available
   const liveShare = await vsls.getApi();
@@ -27,6 +40,9 @@ export async function activate(context: vscode.ExtensionContext) {
     color: 'transparent', // Make the text transparent (invisible)
     backgroundColor: 'transparent', // Transparent background
     textDecoration: 'none',
+  });
+  const slightlyTransparentDecorationType = vscode.window.createTextEditorDecorationType({
+    color: 'rgba(0, 0, 0, 0.5)',
   });
 
   const ellipsisDecorationType = vscode.window.createTextEditorDecorationType({
@@ -65,6 +81,10 @@ export async function activate(context: vscode.ExtensionContext) {
             updateEllipsisDecoration(editor, line);
           });
         }
+      } else {
+        // TODO: if guest, turn text slightly transparent -- need to have guest running extension
+        vscode.window.showInformationMessage('Guest mode');
+        editor.setDecorations(slightlyTransparentDecorationType, [new vscode.Range(0, 0, editor.document.lineCount, 0)]);
       }
 
       // Remove decoration from the previous line when moving to a new line
@@ -191,7 +211,7 @@ function countAllTabs(
   console.log(tabs);
 }
 
-// Apply both the hidden line text to the current line
+// Apply hide line text to the current line
 function hideLine(
   lineNumber: number[],
   editor: vscode.TextEditor,
