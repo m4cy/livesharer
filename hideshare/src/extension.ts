@@ -19,6 +19,12 @@ export async function activate(context: vscode.ExtensionContext) {
   });
   context.subscriptions.push(changeModeBlock);
 
+  const changeModeRealTime = vscode.commands.registerCommand('hideshare.enableRealTimeMode', () => {
+    vscode.window.showInformationMessage('Changed to Real-Time Mode!');
+    extensionMode = 'real-time';
+  });
+  context.subscriptions.push(changeModeRealTime);
+
   // Wait for Live Share API to be available
   const liveShare = await vsls.getApi();
 

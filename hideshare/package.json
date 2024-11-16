@@ -2,7 +2,7 @@
   "name": "hideshare",
   "displayName": "hideshare",
   "description": "liveshare for people with secrets",
-  "version": "0.0.1",
+  "version": "0.0.3",
   "engines": {
     "vscode": "^1.95.0"
   },
@@ -26,6 +26,10 @@
       {
         "command": "hideshare.enableBlockMode",
         "title": "Hideshare: Enable Block Mode"
+      },
+      {
+        "command": "hideshare.enableRealTimeMode",
+        "title": "Hideshare: Enable Real-Time Mode"
       }
     ]
   },
