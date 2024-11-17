@@ -69,12 +69,14 @@ async function activate(context) {
             color: 'gray', // Gray color for the ellipsis
         },
     });
+    const commentor = vscode.comments.createCommentController('id', 'label');
     // Track the last active line number -- loop over
     let lastActiveLine = -1;
     // Keep track of indentation levels
     const tabs = [];
     // Trigger the decoration update based on text changes or cursor position
     const onDidChangeTextDocument = vscode.workspace.onDidChangeTextDocument(async (event) => {
+        let commentThread;
         const editor = vscode.window.activeTextEditor;
         if (!editor) {
             return;
@@ -89,7 +91,17 @@ async function activate(context) {
                 if (peer.role !== vsls.Role.Host) {
                     event.contentChanges.forEach(change => {
                         let line = change.range.start.line;
+                        commentThread = commentor.createCommentThread(event.document.uri, change.range, []);
                         hideLine([line], editor, hiddenLineDecorationType);
+                        console.log('whoami', liveShare?.session?.user?.displayName);
+                        commentThread.comments = [
+                            {
+                                body: new vscode.MarkdownString('Code not visible'),
+                                mode: vscode.CommentMode.Editing,
+                                author: { name: liveShare?.session?.user?.displayName || 'HideShare' },
+                            },
+                        ];
+                        console.log('where are my comments', commentThread);
                         updateEllipsisDecoration(editor, line);
                     });
                 }
@@ -139,10 +151,19 @@ async function activate(context) {
                         }
                         // console.log(early, later, tabs[early], tabs[later])
                         updateEllipsisDecoration(editor, change.range.start.line); // can track changes on change line
+                        commentThread = commentor.createCommentThread(event.document.uri, change.range, []);
+                        commentThread.comments = [
+                            {
+                                body: new vscode.MarkdownString('Code not visible'),
+                                mode: vscode.CommentMode.Preview,
+                                author: { name: 'HideShare' },
+                            },
+                        ];
                     });
                     // If the line is being typed, apply the ellipsis and hide the text
                     // console.log(editor.document.lineAt(early).text, editor.document.lineAt(later).text)
                     hideLine([early, later], editor, hiddenLineDecorationType);
+                    // if (!commentThread || !commentThread.comments) return
                     // applyHiddenLineAndEllipsis([early, later], editor, hiddenLineDecorationType, ellipsisDecorationType);
                 }
             }
