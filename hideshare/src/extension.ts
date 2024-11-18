@@ -1,29 +1,14 @@
 import * as vscode from 'vscode';
 import * as vsls from 'vsls';
 
+// will be running host-side
 export async function activate(context: vscode.ExtensionContext) {
 
   let extensionMode = await vscode.window.showInformationMessage('Select a HideShare mode', 'real-time', 'line', 'block');
+  if (extensionMode === undefined) {
+    return;
+  }
   console.log('extensionMode', extensionMode);
-
-  const changeModeLine = vscode.commands.registerCommand('hideshare.enableLineMode', () => {
-		vscode.window.showInformationMessage('Changed to Line Mode!');
-    extensionMode = 'line';
-    // TODO: send message to guest that mode was changed - need to figure out how to have extension running on both host and guest
-	});
-  context.subscriptions.push(changeModeLine);
-
-  const changeModeBlock = vscode.commands.registerCommand('hideshare.enableBlockMode', () => {
-    vscode.window.showInformationMessage('Changed to Block Mode!');
-    extensionMode = 'block';
-  });
-  context.subscriptions.push(changeModeBlock);
-
-  const changeModeRealTime = vscode.commands.registerCommand('hideshare.enableRealTimeMode', () => {
-    vscode.window.showInformationMessage('Changed to Real-Time Mode!');
-    extensionMode = 'real-time';
-  });
-  context.subscriptions.push(changeModeRealTime);
 
   // Wait for Live Share API to be available
   const liveShare = await vsls.getApi();
@@ -33,19 +18,70 @@ export async function activate(context: vscode.ExtensionContext) {
   }
 
   console.log('session', liveShare.session);
-  if (liveShare) {
-    // vscode.window.showInformationMessage(`Hello World from ${liveShare.session.role}!`);
-    const sessionLink = await liveShare.share();
-    if (sessionLink) {
-      vscode.window.showInformationMessage(`Live Share link: ${sessionLink}`);
+
+
+  // vscode.window.showInformationMessage(`Hello World from ${liveShare.session.role}!`);
+  const sessionLink = await liveShare.share();
+  if (sessionLink) {
+    vscode.window.showInformationMessage(`Live Share link: ${sessionLink}`);
+  }
+
+  // check if session live
+  if (liveShare.session.role === vsls.Role.Host) {
+    vscode.window.showInformationMessage('Host mode');
+  } else {
+    vscode.window.showInformationMessage('Guest mode');
+  }
+
+  let notificationService : null | vsls.SharedService = null;
+  try {
+    notificationService = await liveShare.shareService('notificationService');
+    if (notificationService === null) {
+      vscode.window.showErrorMessage('Failed to setup notification service');
+      return;
+    }
+  } catch (error) {
+    vscode.window.showErrorMessage('Error sharing notification service:' + error);
+    return;
+  }
+  function sendNotification(message: string) {
+    if (notificationService && notificationService.isServiceAvailable) {
+        notificationService.notify('showNotification', JSON.parse('{"message": "' + message + '"}'));
+    } else {
+        console.log('Notification service is not available');
     }
   }
 
+  const changeModeLine = vscode.commands.registerCommand('hideshare.enableLineMode', () => {
+    vscode.window.showInformationMessage('Changed to Line Mode!');
+    extensionMode = 'line';
+    // TODO: send message to guest that mode was changed - need to figure out how to have extension running on both host and guest
+    sendNotification('Switched to Line Mode');
+  });
+  context.subscriptions.push(changeModeLine);
+
+  const changeModeBlock = vscode.commands.registerCommand('hideshare.enableBlockMode', () => {
+    vscode.window.showInformationMessage('Changed to Block Mode!');
+    extensionMode = 'block';
+    sendNotification('Switched to Block Mode');
+  });
+  context.subscriptions.push(changeModeBlock);
+
+  const changeModeRealTime = vscode.commands.registerCommand('hideshare.enableRealTimeMode', () => {
+    vscode.window.showInformationMessage('Changed to Real-Time Mode!');
+    extensionMode = 'real-time';
+    sendNotification('Switched to Real-Time Mode');
+  });
+  context.subscriptions.push(changeModeRealTime);
+
   // Create a decoration type to hide the line's text and display ellipsis (...)
+  // const hiddenLineDecorationType = vscode.window.createTextEditorDecorationType({
+  //   color: 'transparent', // Make the text transparent (invisible)
+  //   backgroundColor: 'transparent', // Transparent background
+  //   textDecoration: 'none',
+  // });
   const hiddenLineDecorationType = vscode.window.createTextEditorDecorationType({
-    color: 'transparent', // Make the text transparent (invisible)
-    backgroundColor: 'transparent', // Transparent background
-    textDecoration: 'none',
+    color: 'rgba(0, 0, 0, 0.5)',
   });
   const slightlyTransparentDecorationType = vscode.window.createTextEditorDecorationType({
     color: 'rgba(0, 0, 0, 0.5)',
