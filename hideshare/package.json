@@ -24,8 +24,8 @@
         "title": "Hideshare: Enable Line Mode"
       },
       {
-        "command": "hideshare.enableBlockMode",
-        "title": "Hideshare: Enable Block Mode"
+        "command": "hideshare.enableWordMode",
+        "title": "Hideshare: Enable Word Mode"
       },
       {
         "command": "hideshare.enableRealTimeMode",

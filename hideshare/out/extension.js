@@ -28,7 +28,7 @@ exports.deactivate = deactivate;
 const vscode = __importStar(require("vscode"));
 const vsls = __importStar(require("vsls"));
 async function activate(context) {
-    let extensionMode = await vscode.window.showInformationMessage('Select a HideShare mode', 'real-time', 'line', 'block');
+    let extensionMode = await vscode.window.showInformationMessage('Select a HideShare mode', 'real-time', 'line', 'word');
     console.log('extensionMode', extensionMode);
     const changeModeLine = vscode.commands.registerCommand('hideshare.enableLineMode', () => {
         vscode.window.showInformationMessage('Changed to Line Mode!');
@@ -36,11 +36,17 @@ async function activate(context) {
         // TODO: send message to guest that mode was changed - need to figure out how to have extension running on both host and guest
     });
     context.subscriptions.push(changeModeLine);
-    const changeModeBlock = vscode.commands.registerCommand('hideshare.enableBlockMode', () => {
-        vscode.window.showInformationMessage('Changed to Block Mode!');
-        extensionMode = 'block';
+    const changeModeWord = vscode.commands.registerCommand('hideshare.enableWordMode', () => {
+        vscode.window.showInformationMessage('Changed to Word Mode!');
+        extensionMode = 'word';
+        // TODO: send message to guest that mode was changed - need to figure out how to have extension running on both host and guest
     });
-    context.subscriptions.push(changeModeBlock);
+    context.subscriptions.push(changeModeWord);
+    const changeModeRealTime = vscode.commands.registerCommand('hideshare.enableRealTimeMode', () => {
+        vscode.window.showInformationMessage('Changed to Real-Time Mode!');
+        extensionMode = 'real-time';
+    });
+    context.subscriptions.push(changeModeRealTime);
     // Wait for Live Share API to be available
     const liveShare = await vsls.getApi();
     if (!liveShare) {
@@ -71,8 +77,6 @@ async function activate(context) {
     });
     // Track the last active line number -- loop over
     let lastActiveLine = -1;
-    // Keep track of indentation levels
-    const tabs = [];
     // Trigger the decoration update based on text changes or cursor position
     const onDidChangeTextDocument = vscode.workspace.onDidChangeTextDocument(async (event) => {
         const editor = vscode.window.activeTextEditor;
@@ -80,17 +84,14 @@ async function activate(context) {
             return;
         }
         let activeLine = editor.selection.active.line;
-        // Beginning and end of line range to hide in block mode
-        let early = 0;
-        let later = 0;
         if (extensionMode === 'line') {
             if (liveShare.session.role !== vsls.Role.Guest) {
                 let peer = await liveShare.getPeerForTextDocumentChangeEvent(event);
                 if (peer.role !== vsls.Role.Host) {
                     event.contentChanges.forEach(change => {
                         let line = change.range.start.line;
-                        hideLine([line], editor, hiddenLineDecorationType);
-                        updateEllipsisDecoration(editor, line);
+                        hideLine(line, 'line', editor, hiddenLineDecorationType);
+                        updateEllipsisDecoration(editor, line, 'line');
                     });
                 }
             }
@@ -108,43 +109,21 @@ async function activate(context) {
             // Update last active line to the current line
             lastActiveLine = activeLine;
         }
-        else if (extensionMode === 'block') {
+        else if (extensionMode === 'word') {
             if (liveShare.session.role !== vsls.Role.Guest) {
                 let peer = await liveShare.getPeerForTextDocumentChangeEvent(event);
                 if (peer.role !== vsls.Role.Host) {
-                    // Record indentation levels for all editor lines
-                    countAllTabs(editor, tabs);
-                    event.contentChanges.forEach((change) => {
-                        // If new tab is added to the line, increment tab count
-                        // if (change.text.includes('    ')) {
-                        // 	console.log('tab added to', activeLine);
-                        // 	if (!tabs[activeLine]) tabs[activeLine] = 0
-                        // 	tabs[activeLine] += 1
-                        // }
-                        early = later = change.range.start.line;
-                        // console.log('active line number', activeLine)
-                        // Find start and end of line range based on same indentation level
-                        while (tabs[early] === tabs[change.range.start.line] || tabs[later] === tabs[change.range.start.line]) {
-                            if (tabs[early] === tabs[change.range.start.line]) {
-                                early--;
-                            }
-                            if (tabs[later] === tabs[change.range.start.line]) {
-                                later++;
-                            }
-                        }
-                        // When we exit the loop, early will be correct, later will be one greater than it should be
-                        later--;
-                        if (tabs[early] - tabs[change.range.start.line] > 1) {
-                            early++;
-                        }
-                        // console.log(early, later, tabs[early], tabs[later])
-                        updateEllipsisDecoration(editor, change.range.start.line); // can track changes on change line
+                    event.contentChanges.forEach(change => {
+                        let line = change.range.start.line;
+                        hideLine(line, 'word', editor, hiddenLineDecorationType);
+                        updateEllipsisDecoration(editor, line, 'word');
                     });
-                    // If the line is being typed, apply the ellipsis and hide the text
-                    // console.log(editor.document.lineAt(early).text, editor.document.lineAt(later).text)
-                    hideLine([early, later], editor, hiddenLineDecorationType);
-                    // applyHiddenLineAndEllipsis([early, later], editor, hiddenLineDecorationType, ellipsisDecorationType);
                 }
+            }
+            else {
+                // TODO: if guest, turn text slightly transparent -- need to have guest running extension
+                vscode.window.showInformationMessage('Guest mode');
+                editor.setDecorations(slightlyTransparentDecorationType, [new vscode.Range(0, 0, editor.document.lineCount, 0)]);
             }
         }
     });
@@ -154,32 +133,42 @@ async function activate(context) {
 const ellipsisDecorationTypes = [
     vscode.window.createTextEditorDecorationType({
         after: {
-            contentText: '.', // Single dot
+            contentText: ' .', // Single dot
             color: 'gray',
         },
     }),
     vscode.window.createTextEditorDecorationType({
         after: {
-            contentText: '..', // Two dots
+            contentText: ' ..', // Two dots
             color: 'gray',
         },
     }),
     vscode.window.createTextEditorDecorationType({
         after: {
-            contentText: '...', // Three dots
+            contentText: ' ...', // Three dots
             color: 'gray',
         },
     }),
 ];
 // Change the ellipsis decoration based on character count
-function updateEllipsisDecoration(editor, lineNumber) {
+function updateEllipsisDecoration(editor, lineNumber, mode) {
     // Using actual line value so accessing peer's cursor position implicitly
     const lineText = editor.document.lineAt(lineNumber).text;
-    // Find the first non-whitespace
-    const startPos = lineText.search(/\S/);
-    // vscode.window.showInformationMessage(`lineText: ${lineText}, startPos: ${startPos.character}`);
-    const modValue = lineText.length % 3;
-    const lineRange = new vscode.Range(lineNumber, startPos, lineNumber, startPos);
+    let lineRange;
+    let startPos;
+    let modValue;
+    if (mode === 'line') {
+        // Find the first non-whitespace
+        startPos = lineText.search(/\S/);
+        // vscode.window.showInformationMessage(`lineText: ${lineText}, startPos: ${startPos.character}`);
+        modValue = lineText.length % 3;
+        lineRange = new vscode.Range(lineNumber, startPos, lineNumber, startPos);
+    }
+    else {
+        startPos = editor.document.lineAt(lineNumber).text.lastIndexOf(' ');
+        lineRange = new vscode.Range(lineNumber, startPos, lineNumber, startPos);
+        modValue = 2;
+    }
     // Clear old decorations and set current ellipses style
     ellipsisDecorationTypes.forEach((decoration, index) => {
         if (index !== modValue) {
@@ -188,32 +177,15 @@ function updateEllipsisDecoration(editor, lineNumber) {
     });
     editor.setDecorations(ellipsisDecorationTypes[modValue], [lineRange]);
 }
-// Calculate how many indents are on a line
-function countAllTabs(editor, tabs) {
-    for (let i = 0; i < editor.document.lineCount; i++) {
-        const line = editor.document.lineAt(i);
-        console.log('line', i, line.text);
-        if (!line.isEmptyOrWhitespace) {
-            // leetcode uses tab = 4 spaces
-            tabs[i] = line.firstNonWhitespaceCharacterIndex / 4;
-        }
-        else if (line.text.includes('    ')) { // if line is composed only of tabs, give it the same indent level as the line below it
-            tabs[i] = editor.document.lineAt(i + 1).firstNonWhitespaceCharacterIndex / 4;
-        }
-        else { // empty line
-            tabs[i] = 0;
-        }
-    }
-    console.log(tabs);
-}
 // Apply hide line text to the current line
-function hideLine(lineNumber, editor, hiddenDecorationType) {
+function hideLine(lineNumber, mode, editor, hiddenDecorationType) {
     let lineRange;
-    if (lineNumber.length === 1) {
-        lineRange = editor.document.lineAt(lineNumber[0]).range;
+    if (mode === 'line') {
+        lineRange = editor.document.lineAt(lineNumber).range;
     }
     else {
-        lineRange = new vscode.Range(editor.document.lineAt(lineNumber[0]).range.start, editor.document.lineAt(lineNumber[1]).range.end);
+        let startIndex = new vscode.Position(lineNumber, editor.document.lineAt(lineNumber).text.lastIndexOf(' '));
+        lineRange = new vscode.Range(startIndex, editor.document.lineAt(lineNumber).range.end);
     }
     // Apply the hidden text decoration (make text transparent) to the line
     editor.setDecorations(hiddenDecorationType, [lineRange]);
