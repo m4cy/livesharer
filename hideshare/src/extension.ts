@@ -1,24 +1,78 @@
 import * as vscode from 'vscode';
 import * as vsls from 'vsls';
 
+// will be running host-side
 export async function activate(context: vscode.ExtensionContext) {
 
-	let extensionMode = await vscode.window.showInformationMessage('Select a HideShare mode', 'real-time', 'line', 'word');
-	console.log('extensionMode', extensionMode);
+  let extensionMode = await vscode.window.showInformationMessage('Select a HideShare mode', 'real-time', 'line', 'block', 'word');
+  if (extensionMode === undefined) {
+    return;
+  }
+  console.log('extensionMode', extensionMode);
 
-	const changeModeLine = vscode.commands.registerCommand('hideshare.enableLineMode', () => {
-		vscode.window.showInformationMessage('Changed to Line Mode!');
-		extensionMode = 'line';
-		// TODO: send message to guest that mode was changed - need to figure out how to have extension running on both host and guest
-	});
-	context.subscriptions.push(changeModeLine);
+  // Wait for Live Share API to be available
+  const liveShareAPI = await vsls.getApi();
 
+	if (!liveShareAPI) {
+		return;
+	}
+
+  console.log('session', liveShareAPI.session);
+
+
+  // vscode.window.showInformationMessage(`Hello World from ${liveShare.session.role}!`);
+  const sessionLink = await liveShareAPI.share();
+  if (sessionLink) {
+    vscode.window.showInformationMessage(`Live Share link: ${sessionLink}`);
+  }
+
+  // check if session live
+  if (liveShareAPI.session.role === vsls.Role.Host) {
+    vscode.window.showInformationMessage('Host mode');
+  } else {
+    vscode.window.showInformationMessage('Guest mode');
+  }
+
+  let notificationService : null | vsls.SharedService = null;
+  try {
+    notificationService = await liveShareAPI.shareService('notificationService');
+    if (notificationService === null) {
+      vscode.window.showErrorMessage('Failed to setup notification service');
+      return;
+    }
+  } catch (error) {
+    vscode.window.showErrorMessage('Error sharing notification service:' + error);
+    return;
+  }
+  function sendNotification(message: string) {
+    if (notificationService && notificationService.isServiceAvailable) {
+        notificationService.notify('showNotification', JSON.parse('{"message": "' + message + '"}'));
+    } else {
+        console.log('Notification service is not available');
+    }
+  }
+
+  const changeModeLine = vscode.commands.registerCommand('hideshare.enableLineMode', () => {
+    vscode.window.showInformationMessage('Changed to Line Mode!');
+    extensionMode = 'line';
+    // TODO: send message to guest that mode was changed - need to figure out how to have extension running on both host and guest
+    sendNotification('Switched to Line Mode');
+  });
+  context.subscriptions.push(changeModeLine);
+
+  const changeModeBlock = vscode.commands.registerCommand('hideshare.enableBlockMode', () => {
+    vscode.window.showInformationMessage('Changed to Block Mode!');
+    extensionMode = 'block';
+    sendNotification('Switched to Block Mode');
+  });
+  context.subscriptions.push(changeModeBlock);
 	const changeModeWord = vscode.commands.registerCommand('hideshare.enableWordMode', () => {
 		vscode.window.showInformationMessage('Changed to Word Mode!');
 		extensionMode = 'word';
 		// TODO: send message to guest that mode was changed - need to figure out how to have extension running on both host and guest
 	});
 	context.subscriptions.push(changeModeWord);
+
 
 	const changeModeRealTime = vscode.commands.registerCommand('hideshare.enableRealTimeMode', () => {
 		vscode.window.showInformationMessage('Changed to Real-Time Mode!');
@@ -29,28 +83,31 @@ export async function activate(context: vscode.ExtensionContext) {
 	// Wait for Live Share API to be available
 	const liveShare = await vsls.getApi();
 
-	if (!liveShare) {
+	if (!liveShareAPI) {
 		return;
 	}
 
-	console.log('session', liveShare.session);
-	if (liveShare) {
+	console.log('session', liveShareAPI.session);
+	if (liveShareAPI) {
 		// vscode.window.showInformationMessage(`Hello World from ${liveShare.session.role}!`);
-		const sessionLink = await liveShare.share();
+		const sessionLink = await liveShareAPI.share();
 		if (sessionLink) {
 			vscode.window.showInformationMessage(`Live Share link: ${sessionLink}`);
 		}
 	}
 
-	// Create a decoration type to hide the line's text and display ellipsis (...)
-	const hiddenLineDecorationType = vscode.window.createTextEditorDecorationType({
-		color: 'transparent', // Make the text transparent (invisible)
-		backgroundColor: 'transparent', // Transparent background
-		textDecoration: 'none',
-	});
-	const slightlyTransparentDecorationType = vscode.window.createTextEditorDecorationType({
-		color: 'rgba(0, 0, 0, 0.5)',
-	});
+  // Create a decoration type to hide the line's text and display ellipsis (...)
+  // const hiddenLineDecorationType = vscode.window.createTextEditorDecorationType({
+  //   color: 'transparent', // Make the text transparent (invisible)
+  //   backgroundColor: 'transparent', // Transparent background
+  //   textDecoration: 'none',
+  // });
+  const hiddenLineDecorationType = vscode.window.createTextEditorDecorationType({
+    color: 'rgba(0, 0, 0, 0.5)',
+  });
+  const slightlyTransparentDecorationType = vscode.window.createTextEditorDecorationType({
+    color: 'rgba(0, 0, 0, 0.5)',
+  });
 
 	const ellipsisDecorationType = vscode.window.createTextEditorDecorationType({
 		after: {
@@ -72,8 +129,8 @@ export async function activate(context: vscode.ExtensionContext) {
 		let activeLine = editor.selection.active.line;
 
 		if (extensionMode === 'line') {
-			if (liveShare!.session.role !== vsls.Role.Guest) {
-				let peer = await liveShare!.getPeerForTextDocumentChangeEvent(event);
+			if (liveShareAPI!.session.role !== vsls.Role.Guest) {
+				let peer = await liveShareAPI!.getPeerForTextDocumentChangeEvent(event);
 				if (peer.role !== vsls.Role.Host) {
 					event.contentChanges.forEach(change => {
 						let line = change.range.start.line;
@@ -89,7 +146,7 @@ export async function activate(context: vscode.ExtensionContext) {
 
 			// Remove decoration from the previous line when moving to a new line
 			if (lastActiveLine !== -1 && lastActiveLine !== activeLine) {
-				if (liveShare!.session.role !== vsls.Role.Guest) {
+				if (liveShareAPI!.session.role !== vsls.Role.Guest) {
 					removeLineDecoration(editor, hiddenLineDecorationType, ellipsisDecorationType);
 				}
 			}
@@ -98,8 +155,8 @@ export async function activate(context: vscode.ExtensionContext) {
 			lastActiveLine = activeLine;
 
 		} else if (extensionMode === 'word') {
-			if (liveShare!.session.role !== vsls.Role.Guest) {
-				let peer = await liveShare!.getPeerForTextDocumentChangeEvent(event);
+			if (liveShareAPI!.session.role !== vsls.Role.Guest) {
+				let peer = await liveShareAPI!.getPeerForTextDocumentChangeEvent(event);
 				if (peer.role !== vsls.Role.Host) {
 					event.contentChanges.forEach(change => {
 						let line = change.range.start.line;

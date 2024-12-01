@@ -2,7 +2,9 @@
   "name": "hideshare",
   "displayName": "hideshare",
   "description": "liveshare for people with secrets",
-  "version": "0.0.3",
+  "publisher": "ThePenguins",
+  "version": "0.3.3",
+  "icon": "logo.jpg",
   "engines": {
     "vscode": "^1.95.0"
   },
@@ -16,7 +18,8 @@
     "onLiveShare:sessionStarted",
     "onStartupFinished"
   ],
-  "main": "./out/extension.js",
+  "main": "./dist/extension.js",
+  "browser": "./dist/web/extension.js",
   "contributes": {
     "commands": [
       {
@@ -30,16 +33,41 @@
       {
         "command": "hideshare.enableRealTimeMode",
         "title": "Hideshare: Enable Real-Time Mode"
+      },
+      {
+        "command": "hideshare.requestBlock",
+        "title": "Hideshare: Request Block Reveal"
+      },
+      {
+        "command": "hideshare.requestLine",
+        "title": "Hideshare: Request Line Reveal"
+      },
+      {
+        "command": "hideshare.requestRealTime",
+        "title": "Hideshare: Request Real-Time Reveal"
       }
     ]
   },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/m4cy/livesharer/tree/main/hideshare"
+  },
   "scripts": {
-    "vscode:prepublish": "npm run compile",
-    "compile": "tsc -p ./",
-    "watch": "tsc -watch -p ./",
-    "pretest": "npm run compile && npm run lint",
-    "lint": "eslint src",
-    "test": "vscode-test"
+    "compile": "npm run check-types && node esbuild.js",
+    "check-types": "tsc --noEmit",
+    "watch": "npm-run-all -p watch:*",
+    "watch:esbuild": "node esbuild.js --watch",
+    "watch:tsc": "tsc --noEmit --watch --project tsconfig.json",
+    "package": "npm run check-types && node esbuild.js --production",
+    "vscode:prepublish": "npm run package-web",
+    "compile-web": "npm run check-types && node esbuild-web.js",
+    "watch-web": "npm-run-all -p watch-web:*",
+    "watch-web:esbuild": "node esbuild-web.js --watch",
+    "watch-web:tsc": "tsc --noEmit --watch --project tsconfig.json",
+    "package-web": "npm run check-types && node esbuild-web.js --production",
+    "pretest": "npm run compile-web",
+    "test": "vscode-test-web --browserType=chromium --extensionDevelopmentPath=. --extensionTestsPath=dist/web/test/suite/extensionTests.js",
+    "run-in-browser": "vscode-test-web --browserType=chromium --extensionDevelopmentPath=. ."
   },
   "devDependencies": {
     "@types/mocha": "^10.0.9",
@@ -49,10 +77,13 @@
     "@typescript-eslint/parser": "^8.7.0",
     "@vscode/test-cli": "^0.0.10",
     "@vscode/test-electron": "^2.4.1",
+    "esbuild": "^0.24.0",
     "eslint": "^9.13.0",
+    "npm-run-all": "^4.1.5",
     "typescript": "^5.6.3"
   },
   "dependencies": {
+    "@esbuild-plugins/node-globals-polyfill": "^0.2.3",
     "vsls": "^1.0.4753"
   }
 }
