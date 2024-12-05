@@ -3,7 +3,7 @@
   "displayName": "hideshare",
   "description": "liveshare for people with secrets",
   "publisher": "ThePenguins",
-  "version": "0.4.1",
+  "version": "0.4.2",
   "icon": "logo.jpg",
   "engines": {
     "vscode": "^1.95.0"
