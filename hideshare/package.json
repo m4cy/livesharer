@@ -3,7 +3,7 @@
   "displayName": "hideshare",
   "description": "liveshare for people with secrets",
   "publisher": "ThePenguins",
-  "version": "0.4.2",
+  "version": "0.4.4",
   "icon": "logo.jpg",
   "engines": {
     "vscode": "^1.95.0"
@@ -33,18 +33,6 @@
       {
         "command": "hideshare.enableRealTimeMode",
         "title": "Hideshare: Enable Real-Time Mode"
-      },
-      {
-        "command": "hideshare.requestBlock",
-        "title": "Hideshare: Request Block Reveal"
-      },
-      {
-        "command": "hideshare.requestLine",
-        "title": "Hideshare: Request Line Reveal"
-      },
-      {
-        "command": "hideshare.requestRealTime",
-        "title": "Hideshare: Request Real-Time Reveal"
       }
     ]
   },
