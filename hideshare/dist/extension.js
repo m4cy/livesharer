@@ -102,12 +102,12 @@ var require_vscode = __commonJS({
       PolicySetting2["AllowedDomains"] = "allowedDomains";
       PolicySetting2["AllowReadWriteTerminals"] = "allowReadWriteTerminals";
     })(PolicySetting = exports2.PolicySetting || (exports2.PolicySetting = {}));
-    var Role2;
-    (function(Role3) {
-      Role3[Role3["None"] = 0] = "None";
-      Role3[Role3["Host"] = 1] = "Host";
-      Role3[Role3["Guest"] = 2] = "Guest";
-    })(Role2 = exports2.Role || (exports2.Role = {}));
+    var Role;
+    (function(Role2) {
+      Role2[Role2["None"] = 0] = "None";
+      Role2[Role2["Host"] = 1] = "Host";
+      Role2[Role2["Guest"] = 2] = "Guest";
+    })(Role = exports2.Role || (exports2.Role = {}));
     var Access;
     (function(Access2) {
       Access2[Access2["None"] = 0] = "None";
@@ -194,194 +194,54 @@ module.exports = __toCommonJS(extension_exports);
 var vscode = __toESM(require("vscode"));
 var vsls = __toESM(require_vscode());
 async function activate(context) {
-  let extensionMode = await vscode.window.showInformationMessage("Select a HideShare mode", "real-time", "line", "block");
-  if (extensionMode === void 0) {
-    return;
-  }
-  console.log("extensionMode", extensionMode);
   const liveShare = await vsls.getApi();
   if (!liveShare) {
-    return;
+    console.log("Live Share API not available");
   }
-  console.log("session", liveShare.session);
-  const sessionLink = await liveShare.share();
-  if (sessionLink) {
-    vscode.window.showInformationMessage(`Live Share link: ${sessionLink}`);
-  }
-  if (liveShare.session.role === vsls.Role.Host) {
-    vscode.window.showInformationMessage("Host mode");
-  } else {
-    vscode.window.showInformationMessage("Guest mode");
-  }
-  let notificationService = null;
-  try {
-    notificationService = await liveShare.shareService("notificationService");
-    if (notificationService === null) {
-      vscode.window.showErrorMessage("Failed to setup notification service");
-      return;
-    }
-  } catch (error) {
-    vscode.window.showErrorMessage("Error sharing notification service:" + error);
-    return;
-  }
-  function sendNotification(message) {
-    if (notificationService && notificationService.isServiceAvailable) {
-      notificationService.notify("showNotification", JSON.parse('{"message": "' + message + '"}'));
-    } else {
-      console.log("Notification service is not available");
-    }
-  }
+  let extensionMode = await vscode.window.showInformationMessage("Select a HideShare mode", "real-time", "line", "word");
+  console.log("Guest mode activated");
+  const slightlyTransparentDecorationType = vscode.window.createTextEditorDecorationType({
+    opacity: "0.5",
+    fontStyle: "italic"
+  });
+  let lastActiveLine = -1;
   const changeModeLine = vscode.commands.registerCommand("hideshare.enableLineMode", () => {
     vscode.window.showInformationMessage("Changed to Line Mode!");
     extensionMode = "line";
-    sendNotification("Switched to Line Mode");
   });
   context.subscriptions.push(changeModeLine);
-  const changeModeBlock = vscode.commands.registerCommand("hideshare.enableBlockMode", () => {
-    vscode.window.showInformationMessage("Changed to Block Mode!");
-    extensionMode = "block";
-    sendNotification("Switched to Block Mode");
+  const changeModeWord = vscode.commands.registerCommand("hideshare.enableWordMode", () => {
+    vscode.window.showInformationMessage("Changed to Word Mode!");
+    extensionMode = "word";
   });
-  context.subscriptions.push(changeModeBlock);
+  context.subscriptions.push(changeModeWord);
   const changeModeRealTime = vscode.commands.registerCommand("hideshare.enableRealTimeMode", () => {
     vscode.window.showInformationMessage("Changed to Real-Time Mode!");
     extensionMode = "real-time";
-    sendNotification("Switched to Real-Time Mode");
   });
-  context.subscriptions.push(changeModeRealTime);
-  const hiddenLineDecorationType = vscode.window.createTextEditorDecorationType({
-    color: "rgba(0, 0, 0, 0.5)"
-  });
-  const slightlyTransparentDecorationType = vscode.window.createTextEditorDecorationType({
-    color: "rgba(0, 0, 0, 0.5)"
-  });
-  const ellipsisDecorationType = vscode.window.createTextEditorDecorationType({
-    after: {
-      contentText: "...",
-      // Display ellipsis after the line of code
-      color: "gray"
-      // Gray color for the ellipsis
-    }
-  });
-  let lastActiveLine = -1;
-  const tabs = [];
   const onDidChangeTextDocument = vscode.workspace.onDidChangeTextDocument(async (event) => {
-    const editor = vscode.window.activeTextEditor;
-    if (!editor) {
-      return;
-    }
-    let activeLine = editor.selection.active.line;
-    let early = 0;
-    let later = 0;
-    if (extensionMode === "line") {
-      if (liveShare.session.role !== vsls.Role.Guest) {
-        let peer = await liveShare.getPeerForTextDocumentChangeEvent(event);
-        if (peer.role !== vsls.Role.Host) {
-          event.contentChanges.forEach((change) => {
-            let line = change.range.start.line;
-            hideLine([line], editor, hiddenLineDecorationType);
-            updateEllipsisDecoration(editor, line);
-          });
+    for (const editor of vscode.window.visibleTextEditors) {
+      event.contentChanges.forEach((change) => {
+        let line = change.range.start.line;
+        if (extensionMode === "line") {
+          hideLine(line, "line", editor, slightlyTransparentDecorationType);
+        } else if (extensionMode === "word") {
+          hideLine(line, "word", editor, slightlyTransparentDecorationType);
         }
-      } else {
-        vscode.window.showInformationMessage("Guest mode");
-        editor.setDecorations(slightlyTransparentDecorationType, [new vscode.Range(0, 0, editor.document.lineCount, 0)]);
-      }
-      if (lastActiveLine !== -1 && lastActiveLine !== activeLine) {
-        if (liveShare.session.role !== vsls.Role.Guest) {
-          removeLineDecoration(editor, hiddenLineDecorationType, ellipsisDecorationType);
-        }
-      }
-      lastActiveLine = activeLine;
-    } else if (extensionMode === "block") {
-      if (liveShare.session.role !== vsls.Role.Guest) {
-        let peer = await liveShare.getPeerForTextDocumentChangeEvent(event);
-        if (peer.role !== vsls.Role.Host) {
-          countAllTabs(editor, tabs);
-          event.contentChanges.forEach((change) => {
-            early = later = change.range.start.line;
-            while (tabs[early] === tabs[change.range.start.line] || tabs[later] === tabs[change.range.start.line]) {
-              if (tabs[early] === tabs[change.range.start.line]) {
-                early--;
-              }
-              if (tabs[later] === tabs[change.range.start.line]) {
-                later++;
-              }
-            }
-            later--;
-            if (tabs[early] - tabs[change.range.start.line] > 1) {
-              early++;
-            }
-            updateEllipsisDecoration(editor, change.range.start.line);
-          });
-          hideLine([early, later], editor, hiddenLineDecorationType);
-        }
-      }
+      });
     }
   });
   context.subscriptions.push(onDidChangeTextDocument);
 }
-var ellipsisDecorationTypes = [
-  vscode.window.createTextEditorDecorationType({
-    after: {
-      contentText: ".",
-      // Single dot
-      color: "gray"
-    }
-  }),
-  vscode.window.createTextEditorDecorationType({
-    after: {
-      contentText: "..",
-      // Two dots
-      color: "gray"
-    }
-  }),
-  vscode.window.createTextEditorDecorationType({
-    after: {
-      contentText: "...",
-      // Three dots
-      color: "gray"
-    }
-  })
-];
-function updateEllipsisDecoration(editor, lineNumber) {
-  const lineText = editor.document.lineAt(lineNumber).text;
-  const startPos = lineText.search(/\S/);
-  const modValue = lineText.length % 3;
-  const lineRange = new vscode.Range(lineNumber, startPos, lineNumber, startPos);
-  ellipsisDecorationTypes.forEach((decoration, index) => {
-    if (index !== modValue) {
-      editor.setDecorations(decoration, []);
-    }
-  });
-  editor.setDecorations(ellipsisDecorationTypes[modValue], [lineRange]);
-}
-function countAllTabs(editor, tabs) {
-  for (let i = 0; i < editor.document.lineCount; i++) {
-    const line = editor.document.lineAt(i);
-    console.log("line", i, line.text);
-    if (!line.isEmptyOrWhitespace) {
-      tabs[i] = line.firstNonWhitespaceCharacterIndex / 4;
-    } else if (line.text.includes("    ")) {
-      tabs[i] = editor.document.lineAt(i + 1).firstNonWhitespaceCharacterIndex / 4;
-    } else {
-      tabs[i] = 0;
-    }
-  }
-  console.log(tabs);
-}
-function hideLine(lineNumber, editor, hiddenDecorationType) {
+function hideLine(lineNumber, mode, editor, hiddenDecorationType) {
   let lineRange;
-  if (lineNumber.length === 1) {
-    lineRange = editor.document.lineAt(lineNumber[0]).range;
+  if (mode === "line") {
+    lineRange = editor.document.lineAt(lineNumber).range;
   } else {
-    lineRange = new vscode.Range(editor.document.lineAt(lineNumber[0]).range.start, editor.document.lineAt(lineNumber[1]).range.end);
+    let startIndex = new vscode.Position(lineNumber, editor.document.lineAt(lineNumber).text.lastIndexOf(" "));
+    lineRange = new vscode.Range(startIndex, editor.document.lineAt(lineNumber).range.end);
   }
   editor.setDecorations(hiddenDecorationType, [lineRange]);
-}
-function removeLineDecoration(editor, hiddenDecorationType, ellipsisDecorationType) {
-  editor.setDecorations(hiddenDecorationType, []);
-  editor.setDecorations(ellipsisDecorationType, []);
 }
 function deactivate() {
 }

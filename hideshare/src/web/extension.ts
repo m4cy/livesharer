@@ -8,13 +8,13 @@ export async function activate(context: vscode.ExtensionContext) {
   const liveShare = await vsls.getApi();
 
   if (!liveShare) {
-    vscode.window.showInformationMessage('Live Share API not available');
+    console.log('Live Share API not available');
     // return;
   }
 
   let extensionMode = await vscode.window.showInformationMessage('Select a HideShare mode', 'real-time', 'line', 'word');
 
-  vscode.window.showInformationMessage('Guest mode activated');
+  console.log('Guest mode activated');
 
   const slightlyTransparentDecorationType = vscode.window.createTextEditorDecorationType({
     opacity: '0.5',
